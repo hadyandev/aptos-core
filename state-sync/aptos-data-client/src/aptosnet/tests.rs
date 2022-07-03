@@ -54,16 +54,16 @@ fn mock_storage_summary(version: Version) -> StorageServerSummary {
     StorageServerSummary {
         protocol_metadata: ProtocolMetadata {
             max_epoch_chunk_size: 1000,
+            max_state_value_chunk_size: 1000,
             max_transaction_chunk_size: 1000,
             max_transaction_output_chunk_size: 1000,
-            max_account_states_chunk_size: 1000,
         },
         data_summary: DataSummary {
             synced_ledger_info: Some(mock_ledger_info(version)),
             epoch_ending_ledger_infos: None,
             transactions: Some(CompleteDataRange::new(0, version).unwrap()),
             transaction_outputs: Some(CompleteDataRange::new(0, version).unwrap()),
-            account_states: None,
+            states: None,
         },
     }
 }
@@ -1089,7 +1089,7 @@ async fn optimal_chunk_size_calculations() {
     let max_transaction_chunk_size = 700;
     let max_transaction_output_chunk_size = 800;
     let storage_service_config = StorageServiceConfig {
-        max_account_states_chunk_sizes,
+        max_state_chunk_size: max_account_states_chunk_sizes,
         max_concurrent_requests: 0,
         max_epoch_chunk_size,
         max_lru_cache_size: 0,
@@ -1108,7 +1108,7 @@ async fn optimal_chunk_size_calculations() {
         vec![900, 700, 500],
         vec![40],
     );
-    assert_eq!(200, optimal_chunk_sizes.account_states_chunk_size);
+    assert_eq!(200, optimal_chunk_sizes.state_chunk_size);
     assert_eq!(7, optimal_chunk_sizes.epoch_chunk_size);
     assert_eq!(700, optimal_chunk_sizes.transaction_chunk_size);
     assert_eq!(40, optimal_chunk_sizes.transaction_output_chunk_size);
@@ -1118,7 +1118,7 @@ async fn optimal_chunk_size_calculations() {
         calculate_optimal_chunk_sizes(&storage_service_config, vec![], vec![], vec![], vec![]);
     assert_eq!(
         max_account_states_chunk_sizes,
-        optimal_chunk_sizes.account_states_chunk_size
+        optimal_chunk_sizes.state_chunk_size
     );
     assert_eq!(max_epoch_chunk_size, optimal_chunk_sizes.epoch_chunk_size);
     assert_eq!(
@@ -1140,7 +1140,7 @@ async fn optimal_chunk_size_calculations() {
     );
     assert_eq!(
         max_account_states_chunk_sizes,
-        optimal_chunk_sizes.account_states_chunk_size
+        optimal_chunk_sizes.state_chunk_size
     );
     assert_eq!(70, optimal_chunk_sizes.epoch_chunk_size);
     assert_eq!(

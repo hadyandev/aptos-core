@@ -52,9 +52,9 @@ use network::{
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use storage_interface::{DbReader, Order, StartupInfo, TreeState};
 use storage_service_types::{
-    AccountStatesChunkWithProofRequest, CompleteDataRange, DataSummary, Epoch,
-    EpochEndingLedgerInfoRequest, NewTransactionOutputsWithProofRequest,
-    NewTransactionsWithProofRequest, ProtocolMetadata, ServerProtocolVersion, StorageServerSummary,
+    CompleteDataRange, DataSummary, Epoch, EpochEndingLedgerInfoRequest,
+    NewTransactionOutputsWithProofRequest, NewTransactionsWithProofRequest, ProtocolMetadata,
+    ServerProtocolVersion, StateValueChunkWithProofRequest, StorageServerSummary,
     StorageServiceError, StorageServiceMessage, StorageServiceRequest, StorageServiceResponse,
     TransactionOutputsWithProofRequest, TransactionsWithProofRequest,
 };
@@ -109,28 +109,27 @@ async fn test_cachable_requests_eviction() {
 
     // Process a request to fetch an account states chunk. This should cache and serve the response.
     for _ in 0..2 {
-        let request = StorageServiceRequest::GetAccountStatesChunkWithProof(
-            AccountStatesChunkWithProofRequest {
+        let request =
+            StorageServiceRequest::GetStateValueChunkWithProof(StateValueChunkWithProofRequest {
                 version,
-                start_account_index,
-                end_account_index,
-            },
-        );
+                start_index: start_account_index,
+                end_index: end_account_index,
+            });
         let _ = mock_client.process_request(request).await.unwrap();
     }
 
     // Process enough requests to evict the previously cached response
     for version in 0..max_lru_cache_size {
-        let request = StorageServiceRequest::GetNumberOfAccountsAtVersion(version);
+        let request = StorageServiceRequest::GetNumberOfStatesAtVersion(version);
         let _ = mock_client.process_request(request).await.unwrap();
     }
 
     // Process a request to fetch the account states chunk again. This requires refetching the data.
     let request =
-        StorageServiceRequest::GetAccountStatesChunkWithProof(AccountStatesChunkWithProofRequest {
+        StorageServiceRequest::GetStateValueChunkWithProof(StateValueChunkWithProofRequest {
             version,
-            start_account_index,
-            end_account_index,
+            start_index: start_account_index,
+            end_index: end_account_index,
         });
     let _ = mock_client.process_request(request).await.unwrap();
 }
@@ -218,20 +217,16 @@ async fn test_get_server_protocol_version() {
 }
 
 #[tokio::test]
-async fn test_get_account_states_with_proof() {
+async fn test_get_states_with_proof() {
     // Test small and large chunk requests
-    for chunk_size in [
-        1,
-        100,
-        StorageServiceConfig::default().max_account_states_chunk_sizes,
-    ] {
+    for chunk_size in [1, 100, StorageServiceConfig::default().max_state_chunk_size] {
         // Create test data
         let version = 101;
-        let start_account_index = 100;
-        let end_account_index = start_account_index + chunk_size - 1;
+        let start_index = 100;
+        let end_index = start_index + chunk_size - 1;
         let state_value_chunk_with_proof = StateValueChunkWithProof {
-            first_index: start_account_index,
-            last_index: end_account_index,
+            first_index: start_index,
+            last_index: end_index,
             first_key: HashValue::random(),
             last_key: HashValue::random(),
             raw_values: vec![],
@@ -247,8 +242,8 @@ async fn test_get_account_states_with_proof() {
             .times(1)
             .with(
                 eq(version),
-                eq(start_account_index as usize),
-                eq((end_account_index - start_account_index + 1) as usize),
+                eq(start_index as usize),
+                eq((end_index - start_index + 1) as usize),
             )
             .return_once(move |_, _, _| Ok(state_value_chunk_with_proof_clone));
 
@@ -257,40 +252,38 @@ async fn test_get_account_states_with_proof() {
         tokio::spawn(service.start());
 
         // Process a request to fetch an account states chunk with a proof
-        let request = StorageServiceRequest::GetAccountStatesChunkWithProof(
-            AccountStatesChunkWithProofRequest {
+        let request =
+            StorageServiceRequest::GetStateValueChunkWithProof(StateValueChunkWithProofRequest {
                 version,
-                start_account_index,
-                end_account_index,
-            },
-        );
+                start_index,
+                end_index,
+            });
         let response = mock_client.process_request(request).await.unwrap();
 
         // Verify the response is correct
         assert_eq!(
             response,
-            StorageServiceResponse::AccountStatesChunkWithProof(state_value_chunk_with_proof)
+            StorageServiceResponse::StateValueChunkWithProof(state_value_chunk_with_proof)
         );
     }
 }
 
 #[tokio::test]
-async fn test_get_account_states_with_proof_invalid() {
+async fn test_get_states_with_proof_invalid() {
     // Create the storage client and server
     let (mut mock_client, service, _) = MockClient::new(None);
     tokio::spawn(service.start());
 
     // Test invalid ranges and chunks that are too large
-    let max_account_chunk_size = StorageServiceConfig::default().max_account_states_chunk_sizes;
-    let start_account_index = 100;
-    for end_account_index in [99, start_account_index + max_account_chunk_size] {
-        let request = StorageServiceRequest::GetAccountStatesChunkWithProof(
-            AccountStatesChunkWithProofRequest {
+    let max_state_chunk_size = StorageServiceConfig::default().max_state_chunk_size;
+    let start_index = 100;
+    for end_index in [99, start_index + max_state_chunk_size] {
+        let request =
+            StorageServiceRequest::GetStateValueChunkWithProof(StateValueChunkWithProofRequest {
                 version: 0,
-                start_account_index,
-                end_account_index,
-            },
-        );
+                start_index,
+                end_index,
+            });
 
         // Process and verify the response
         let response = mock_client.process_request(request).await.unwrap_err();
@@ -651,10 +644,10 @@ async fn test_get_new_transaction_outputs_max_chunk() {
 }
 
 #[tokio::test]
-async fn test_get_number_of_accounts_at_version() {
+async fn test_get_number_of_states_at_version() {
     // Create test data
     let version = 101;
-    let number_of_accounts: u64 = 560;
+    let number_of_states: u64 = 560;
 
     // Create the mock db reader
     let mut db_reader = create_mock_db_reader();
@@ -662,25 +655,25 @@ async fn test_get_number_of_accounts_at_version() {
         .expect_get_state_leaf_count()
         .times(1)
         .with(eq(version))
-        .returning(move |_| Ok(number_of_accounts as usize));
+        .returning(move |_| Ok(number_of_states as usize));
 
     // Create the storage client and server
     let (mut mock_client, service, _) = MockClient::new(Some(db_reader));
     tokio::spawn(service.start());
 
-    // Process a request to fetch the number of accounts at a version
-    let request = StorageServiceRequest::GetNumberOfAccountsAtVersion(version);
+    // Process a request to fetch the number of states at a version
+    let request = StorageServiceRequest::GetNumberOfStatesAtVersion(version);
     let response = mock_client.process_request(request).await.unwrap();
 
     // Verify the response is correct
     assert_eq!(
         response,
-        StorageServiceResponse::NumberOfAccountsAtVersion(number_of_accounts)
+        StorageServiceResponse::NumberOfStatesAtVersion(number_of_states)
     );
 }
 
 #[tokio::test]
-async fn test_get_number_of_accounts_at_version_invalid() {
+async fn test_get_number_of_states_at_version_invalid() {
     // Create test data
     let version = 1;
 
@@ -697,7 +690,7 @@ async fn test_get_number_of_accounts_at_version_invalid() {
     tokio::spawn(service.start());
 
     // Process a request to fetch the number of accounts at a version
-    let request = StorageServiceRequest::GetNumberOfAccountsAtVersion(version);
+    let request = StorageServiceRequest::GetNumberOfStatesAtVersion(version);
     let response = mock_client.process_request(request).await.unwrap_err();
 
     // Verify the response is correct
@@ -759,7 +752,7 @@ async fn test_get_storage_server_summary() {
             max_transaction_chunk_size: default_storage_config.max_transaction_chunk_size,
             max_transaction_output_chunk_size: default_storage_config
                 .max_transaction_output_chunk_size,
-            max_account_states_chunk_size: default_storage_config.max_account_states_chunk_sizes,
+            max_account_states_chunk_size: default_storage_config.max_state_chunk_size,
         },
         data_summary: DataSummary {
             synced_ledger_info: Some(highest_ledger_info),
@@ -768,7 +761,7 @@ async fn test_get_storage_server_summary() {
             transaction_outputs: Some(
                 CompleteDataRange::new(lowest_version, highest_version).unwrap(),
             ),
-            account_states: Some(
+            states: Some(
                 CompleteDataRange::new(
                     highest_version - state_prune_window as u64 + 1,
                     highest_version,

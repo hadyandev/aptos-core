@@ -283,7 +283,7 @@ async fn test_initialize_account_synchronizer() {
 
     // Initialize the account synchronizer
     let _ = storage_synchronizer
-        .initialize_account_synchronizer(
+        .initialize_state_synchronizer(
             vec![target_ledger_info.clone()],
             target_ledger_info,
             output_list_with_proof,
@@ -292,11 +292,11 @@ async fn test_initialize_account_synchronizer() {
 
     // Save an account states chunk and verify we get a commit notification
     storage_synchronizer
-        .save_account_states(0, create_state_value_chunk_with_proof(false))
+        .save_state_values(0, create_state_value_chunk_with_proof(false))
         .unwrap();
     assert_matches!(
         commit_listener.select_next_some().await,
-        CommitNotification::CommittedAccounts(_)
+        CommitNotification::CommittedStates(_)
     );
 }
 
@@ -315,7 +315,7 @@ async fn test_initialize_account_synchronizer_missing_info() {
 
     // Initialize the account synchronizer
     let account_synchronizer_handle = storage_synchronizer
-        .initialize_account_synchronizer(
+        .initialize_state_synchronizer(
             vec![create_epoch_ending_ledger_info()],
             create_epoch_ending_ledger_info(),
             output_list_with_proof,
@@ -343,7 +343,7 @@ async fn test_initialize_account_synchronizer_receiver_error() {
 
     // Initialize the account synchronizer
     let account_synchronizer_handle = storage_synchronizer
-        .initialize_account_synchronizer(
+        .initialize_state_synchronizer(
             vec![create_epoch_ending_ledger_info()],
             create_epoch_ending_ledger_info(),
             create_output_list_with_proof(),
@@ -420,7 +420,7 @@ async fn test_save_account_states_completion() {
 
     // Initialize the account synchronizer
     let account_synchronizer_handle = storage_synchronizer
-        .initialize_account_synchronizer(
+        .initialize_state_synchronizer(
             epoch_change_proofs.to_vec(),
             target_ledger_info,
             output_list_with_proof.clone(),
@@ -429,13 +429,13 @@ async fn test_save_account_states_completion() {
 
     // Save an account states chunk and verify we get an account commit notification
     storage_synchronizer
-        .save_account_states(0, create_state_value_chunk_with_proof(false))
+        .save_state_values(0, create_state_value_chunk_with_proof(false))
         .unwrap();
     verify_account_commit_notification(&mut commit_listener, false, None).await;
 
     // Save an account states chunk that is the last chunk
     storage_synchronizer
-        .save_account_states(1, create_state_value_chunk_with_proof(true))
+        .save_state_values(1, create_state_value_chunk_with_proof(true))
         .unwrap();
 
     // Verify we get a commit notification
@@ -481,7 +481,7 @@ async fn test_save_account_states_dropped_error_listener() {
 
     // Initialize the account synchronizer
     let account_synchronizer_handle = storage_synchronizer
-        .initialize_account_synchronizer(
+        .initialize_state_synchronizer(
             vec![create_epoch_ending_ledger_info()],
             create_epoch_ending_ledger_info(),
             create_output_list_with_proof(),
@@ -491,7 +491,7 @@ async fn test_save_account_states_dropped_error_listener() {
     // Save an account states chunk
     let notification_id = 0;
     storage_synchronizer
-        .save_account_states(notification_id, create_state_value_chunk_with_proof(false))
+        .save_state_values(notification_id, create_state_value_chunk_with_proof(false))
         .unwrap();
 
     // The handler should panic as the commit listener was dropped
@@ -522,7 +522,7 @@ async fn test_save_account_states_invalid_chunk() {
 
     // Initialize the account synchronizer
     let _ = storage_synchronizer
-        .initialize_account_synchronizer(
+        .initialize_state_synchronizer(
             vec![create_epoch_ending_ledger_info()],
             create_epoch_ending_ledger_info(),
             create_output_list_with_proof(),
@@ -532,7 +532,7 @@ async fn test_save_account_states_invalid_chunk() {
     // Save an account states chunk and verify we get an error notification
     let notification_id = 0;
     storage_synchronizer
-        .save_account_states(notification_id, create_state_value_chunk_with_proof(false))
+        .save_state_values(notification_id, create_state_value_chunk_with_proof(false))
         .unwrap();
     verify_error_notification(&mut error_listener, notification_id).await;
 }
@@ -548,7 +548,7 @@ fn test_save_account_states_without_initialize() {
 
     // Attempting to save the account states should panic as the account
     // synchronizer was not initialized!
-    let _ = storage_synchronizer.save_account_states(0, create_state_value_chunk_with_proof(false));
+    let _ = storage_synchronizer.save_state_values(0, create_state_value_chunk_with_proof(false));
 }
 
 /// Creates a storage synchronizer for testing
@@ -611,10 +611,10 @@ async fn verify_account_commit_notification(
     expected_all_accounts_synced: bool,
     expected_committed_transactions: Option<CommittedTransactions>,
 ) {
-    let CommitNotification::CommittedAccounts(committed_accounts) =
+    let CommitNotification::CommittedStates(committed_accounts) =
         commit_listener.select_next_some().await;
     assert_eq!(
-        committed_accounts.all_accounts_synced,
+        committed_accounts.all_states_synced,
         expected_all_accounts_synced
     );
     assert_eq!(

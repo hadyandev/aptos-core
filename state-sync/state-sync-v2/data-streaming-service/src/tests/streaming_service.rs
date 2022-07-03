@@ -42,7 +42,7 @@ async fn test_notifications_accounts() {
     loop {
         let data_notification = get_data_notification(&mut stream_listener).await.unwrap();
         match data_notification.data_payload {
-            DataPayload::AccountStatesWithProof(accounts_with_proof) => {
+            DataPayload::StateValuesWithProof(accounts_with_proof) => {
                 // Verify the account start index matches the expected index
                 assert_eq!(accounts_with_proof.first_index, next_expected_index);
 
@@ -80,7 +80,7 @@ async fn test_notifications_accounts_multiple_streams() {
     loop {
         let data_notification = get_data_notification(&mut stream_listener).await.unwrap();
         match data_notification.data_payload {
-            DataPayload::AccountStatesWithProof(accounts_with_proof) => {
+            DataPayload::StateValuesWithProof(accounts_with_proof) => {
                 // Verify the indices
                 assert_eq!(accounts_with_proof.first_index, next_expected_index);
                 next_expected_index += accounts_with_proof.raw_values.len() as u64;
@@ -1036,7 +1036,7 @@ async fn test_terminate_stream() {
     // Fetch the first account notification and then terminate the stream
     let data_notification = get_data_notification(&mut stream_listener).await.unwrap();
     match data_notification.data_payload {
-        DataPayload::AccountStatesWithProof(_) => {}
+        DataPayload::StateValuesWithProof(_) => {}
         data_payload => unexpected_payload_type!(data_payload),
     }
 
@@ -1053,7 +1053,7 @@ async fn test_terminate_stream() {
     loop {
         let data_notification = get_data_notification(&mut stream_listener).await.unwrap();
         match data_notification.data_payload {
-            DataPayload::AccountStatesWithProof(_) => {}
+            DataPayload::StateValuesWithProof(_) => {}
             DataPayload::EndOfStream => panic!("The stream should have terminated!"),
             data_payload => unexpected_payload_type!(data_payload),
         }

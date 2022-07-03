@@ -133,8 +133,8 @@ pub struct StreamRequestMessage {
 /// The data streaming request from the client.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum StreamRequest {
-    GetAllAccounts(GetAllAccountsRequest),
     GetAllEpochEndingLedgerInfos(GetAllEpochEndingLedgerInfosRequest),
+    GetAllStates(GetAllStatesRequest),
     GetAllTransactions(GetAllTransactionsRequest),
     GetAllTransactionOutputs(GetAllTransactionOutputsRequest),
     ContinuouslyStreamTransactions(ContinuouslyStreamTransactionsRequest),
@@ -146,8 +146,8 @@ impl StreamRequest {
     /// Returns a summary label for the stream request
     pub fn get_label(&self) -> &'static str {
         match self {
-            Self::GetAllAccounts(_) => "get_all_accounts",
             Self::GetAllEpochEndingLedgerInfos(_) => "get_all_epoch_ending_ledger_infos",
+            Self::GetAllStates(_) => "get_all_states",
             Self::GetAllTransactions(_) => "get_all_transactions",
             Self::GetAllTransactionOutputs(_) => "get_all_transaction_outputs",
             Self::ContinuouslyStreamTransactions(_) => "continuously_stream_transactions",
@@ -159,17 +159,17 @@ impl StreamRequest {
     }
 }
 
-/// A client request for fetching all account states at a specified version.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct GetAllAccountsRequest {
-    pub version: Version,
-    pub start_index: u64,
-}
-
 /// A client request for fetching all available epoch ending ledger infos.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GetAllEpochEndingLedgerInfosRequest {
     pub start_epoch: Epoch,
+}
+
+/// A client request for fetching all states at a specified version.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GetAllStatesRequest {
+    pub version: Version,
+    pub start_index: u64,
 }
 
 /// A client request for fetching all transactions with proofs.
@@ -279,7 +279,7 @@ impl DataStreamingClient for StreamingServiceClient {
         start_index: Option<u64>,
     ) -> Result<DataStreamListener, Error> {
         let start_index = start_index.unwrap_or(0);
-        let client_request = StreamRequest::GetAllAccounts(GetAllAccountsRequest {
+        let client_request = StreamRequest::GetAllStates(GetAllStatesRequest {
             version,
             start_index,
         });

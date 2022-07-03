@@ -5,7 +5,7 @@ use crate::{
     driver::DriverConfiguration,
     error::Error,
     logging::{LogEntry, LogSchema},
-    notification_handlers::CommittedAccounts,
+    notification_handlers::CommittedStates,
     storage_synchronizer::StorageSynchronizerInterface,
     utils,
     utils::{SpeculativeStreamState, PENDING_DATA_LOG_FREQ_SECS},
@@ -437,7 +437,7 @@ impl<
         // Check if we've already fetched the required data for bootstrapping.
         // If not, bootstrap according to the mode.
         match self.driver_configuration.config.bootstrapping_mode {
-            BootstrappingMode::DownloadLatestAccountStates => {
+            BootstrappingMode::DownloadLatestStates => {
                 if (self.account_state_syncer.ledger_info_to_sync.is_none()
                     && highest_synced_version >= highest_known_ledger_version)
                     || self.account_state_syncer.is_sync_complete
@@ -484,7 +484,7 @@ impl<
             // Fetch and process any data notifications
             let data_notification = self.fetch_next_data_notification().await?;
             match data_notification.data_payload {
-                DataPayload::AccountStatesWithProof(account_states_with_proof) => {
+                DataPayload::StateValuesWithProof(account_states_with_proof) => {
                     self.process_account_states_payload(
                         data_notification.notification_id,
                         account_states_with_proof,
@@ -791,10 +791,7 @@ impl<
         // Verify that we're expecting account payloads
         let bootstrapping_mode = self.driver_configuration.config.bootstrapping_mode;
         if self.should_fetch_epoch_ending_ledger_infos()
-            || !matches!(
-                bootstrapping_mode,
-                BootstrappingMode::DownloadLatestAccountStates
-            )
+            || !matches!(bootstrapping_mode, BootstrappingMode::DownloadLatestStates)
         {
             self.terminate_active_stream(notification_id, NotificationFeedback::InvalidPayloadData)
                 .await?;
@@ -824,7 +821,7 @@ impl<
             let epoch_change_proofs = self.verified_epoch_states.all_epoch_ending_ledger_infos();
 
             // Initialize the account state synchronizer
-            let _ = self.storage_synchronizer.initialize_account_synchronizer(
+            let _ = self.storage_synchronizer.initialize_state_synchronizer(
                 epoch_change_proofs,
                 ledger_info_to_sync,
                 transaction_output_to_sync.clone(),
@@ -858,7 +855,7 @@ impl<
         let last_account_index = account_state_chunk_with_proof.last_index;
         if let Err(error) = self
             .storage_synchronizer
-            .save_account_states(notification_id, account_state_chunk_with_proof)
+            .save_state_values(notification_id, account_state_chunk_with_proof)
         {
             self.terminate_active_stream(notification_id, NotificationFeedback::InvalidPayloadData)
                 .await?;
@@ -934,13 +931,11 @@ impl<
         // Verify that we're expecting transaction or output payloads
         let bootstrapping_mode = self.driver_configuration.config.bootstrapping_mode;
         if self.should_fetch_epoch_ending_ledger_infos()
-            || (matches!(
-                bootstrapping_mode,
-                BootstrappingMode::DownloadLatestAccountStates
-            ) && self
-                .account_state_syncer
-                .transaction_output_to_sync
-                .is_some())
+            || (matches!(bootstrapping_mode, BootstrappingMode::DownloadLatestStates)
+                && self
+                    .account_state_syncer
+                    .transaction_output_to_sync
+                    .is_some())
         {
             self.terminate_active_stream(notification_id, NotificationFeedback::InvalidPayloadData)
                 .await?;
@@ -950,10 +945,7 @@ impl<
         }
 
         // If we're account state syncing, we expect a single transaction info
-        if matches!(
-            bootstrapping_mode,
-            BootstrappingMode::DownloadLatestAccountStates
-        ) {
+        if matches!(bootstrapping_mode, BootstrappingMode::DownloadLatestStates) {
             return self
                 .verify_transaction_info_to_sync(
                     notification_id,
@@ -1263,23 +1255,23 @@ impl<
     /// committed to storage.
     pub fn handle_committed_accounts(
         &mut self,
-        committed_accounts: CommittedAccounts,
+        committed_accounts: CommittedStates,
     ) -> Result<(), Error> {
         // Update the last committed account index
         self.account_state_syncer.next_account_index_to_commit = committed_accounts
-            .last_committed_account_index
+            .last_committed_state_index
             .checked_add(1)
             .ok_or_else(|| {
                 Error::IntegerOverflow("The next account index to commit has overflown!".into())
             })?;
 
         // Check if we've downloaded all account states
-        if committed_accounts.all_accounts_synced {
+        if committed_accounts.all_states_synced {
             info!(LogSchema::new(LogEntry::Bootstrapper).message(&format!(
                 "Successfully synced all account states at version: {:?}. \
                 Last committed account index: {:?}",
                 self.account_state_syncer.ledger_info_to_sync,
-                committed_accounts.last_committed_account_index
+                committed_accounts.last_committed_state_index
             )));
             self.account_state_syncer.is_sync_complete = true;
         }

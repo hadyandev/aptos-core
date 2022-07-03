@@ -32,9 +32,9 @@ use std::{
 };
 use storage_interface::DbReader;
 use storage_service_types::{
-    AccountStatesChunkWithProofRequest, CompleteDataRange, DataSummary,
-    EpochEndingLedgerInfoRequest, ProtocolMetadata, Result, ServerProtocolVersion,
-    StorageServerSummary, StorageServiceError, StorageServiceRequest, StorageServiceResponse,
+    CompleteDataRange, DataSummary, EpochEndingLedgerInfoRequest, ProtocolMetadata, Result,
+    ServerProtocolVersion, StateValueChunkWithProofRequest, StorageServerSummary,
+    StorageServiceError, StorageServiceRequest, StorageServiceResponse,
     TransactionOutputsWithProofRequest, TransactionsWithProofRequest,
 };
 use thiserror::Error;
@@ -561,7 +561,7 @@ fn refresh_cached_storage_summary<T: StorageReaderInterface>(
         max_epoch_chunk_size: storage_config.max_epoch_chunk_size,
         max_transaction_chunk_size: storage_config.max_transaction_chunk_size,
         max_transaction_output_chunk_size: storage_config.max_transaction_output_chunk_size,
-        max_account_states_chunk_size: storage_config.max_account_states_chunk_sizes,
+        max_account_states_chunk_size: storage_config.max_state_chunk_size,
     };
 
     // Save the storage server summary
@@ -740,14 +740,14 @@ impl<T: StorageReaderInterface> Handler<T> {
 
         // Fetch the response from storage
         let response = match request {
-            StorageServiceRequest::GetAccountStatesChunkWithProof(request) => {
+            StorageServiceRequest::GetStateValueChunkWithProof(request) => {
                 self.get_account_states_chunk_with_proof(request)
             }
             StorageServiceRequest::GetEpochEndingLedgerInfos(request) => {
                 self.get_epoch_ending_ledger_infos(request)
             }
-            StorageServiceRequest::GetNumberOfAccountsAtVersion(version) => {
-                self.get_number_of_accounts_at_version(*version)
+            StorageServiceRequest::GetNumberOfStatesAtVersion(version) => {
+                self.get_number_of_states_at_version(*version)
             }
             StorageServiceRequest::GetTransactionOutputsWithProof(request) => {
                 self.get_transaction_outputs_with_proof(request)
@@ -769,15 +769,15 @@ impl<T: StorageReaderInterface> Handler<T> {
 
     fn get_account_states_chunk_with_proof(
         &self,
-        request: &AccountStatesChunkWithProofRequest,
+        request: &StateValueChunkWithProofRequest,
     ) -> Result<StorageServiceResponse, Error> {
         let account_states_chunk_with_proof = self.storage.get_account_states_chunk_with_proof(
             request.version,
-            request.start_account_index,
-            request.end_account_index,
+            request.start_index,
+            request.end_index,
         )?;
 
-        Ok(StorageServiceResponse::AccountStatesChunkWithProof(
+        Ok(StorageServiceResponse::StateValueChunkWithProof(
             account_states_chunk_with_proof,
         ))
     }
@@ -795,14 +795,14 @@ impl<T: StorageReaderInterface> Handler<T> {
         ))
     }
 
-    fn get_number_of_accounts_at_version(
+    fn get_number_of_states_at_version(
         &self,
         version: Version,
     ) -> Result<StorageServiceResponse, Error> {
-        let number_of_accounts = self.storage.get_number_of_accounts(version)?;
+        let number_of_states = self.storage.get_number_of_states(version)?;
 
-        Ok(StorageServiceResponse::NumberOfAccountsAtVersion(
-            number_of_accounts,
+        Ok(StorageServiceResponse::NumberOfStatesAtVersion(
+            number_of_states,
         ))
     }
 
@@ -892,9 +892,8 @@ pub trait StorageReaderInterface: Clone + Send + 'static {
         end_version: u64,
     ) -> Result<TransactionOutputListWithProof, Error>;
 
-    /// Returns the number of accounts in the account state tree at the
-    /// specified version.
-    fn get_number_of_accounts(&self, version: u64) -> Result<u64, Error>;
+    /// Returns the number of states in the state tree at the specified version.
+    fn get_number_of_states(&self, version: u64) -> Result<u64, Error>;
 
     /// Returns a chunk holding a list of account states starting at the
     /// specified `start_account_index` and ending at
@@ -1035,7 +1034,7 @@ impl StorageReaderInterface for StorageReader {
             epoch_ending_ledger_infos,
             transactions,
             transaction_outputs,
-            account_states,
+            states: account_states,
         };
 
         Ok(data_summary)
@@ -1120,12 +1119,12 @@ impl StorageReaderInterface for StorageReader {
         Ok(output_list_with_proof)
     }
 
-    fn get_number_of_accounts(&self, version: u64) -> Result<u64, Error> {
-        let number_of_accounts = self
+    fn get_number_of_states(&self, version: u64) -> Result<u64, Error> {
+        let number_of_states = self
             .storage
             .get_state_leaf_count(version)
             .map_err(|error| Error::StorageErrorEncountered(error.to_string()))?;
-        Ok(number_of_accounts as u64)
+        Ok(number_of_states as u64)
     }
 
     fn get_account_states_chunk_with_proof(
@@ -1135,7 +1134,7 @@ impl StorageReaderInterface for StorageReader {
         end_account_index: u64,
     ) -> Result<StateValueChunkWithProof, Error> {
         let expected_num_accounts = inclusive_range_len(start_account_index, end_account_index)?;
-        let max_account_chunk_size = self.config.max_account_states_chunk_sizes;
+        let max_account_chunk_size = self.config.max_state_chunk_size;
         if expected_num_accounts > max_account_chunk_size {
             return Err(Error::InvalidRequest(format!(
                 "Requested number of accounts is larger than the maximum! \

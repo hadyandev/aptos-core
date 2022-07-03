@@ -7,7 +7,7 @@ use crate::{
     },
     data_stream::{DataStream, DataStreamListener},
     streaming_client::{
-        GetAllAccountsRequest, GetAllEpochEndingLedgerInfosRequest, GetAllTransactionsRequest,
+        GetAllEpochEndingLedgerInfosRequest, GetAllStatesRequest, GetAllTransactionsRequest,
         NotificationFeedback, StreamRequest,
     },
     tests::utils::{
@@ -61,7 +61,7 @@ async fn test_stream_blocked() {
             client_request: client_request.clone(),
             client_response: Some(Ok(Response {
                 context,
-                payload: ResponsePayload::NumberOfAccountStates(10),
+                payload: ResponsePayload::NumberOfStates(10),
             })),
         };
         insert_response_into_pending_queue(&mut data_stream, pending_response);
@@ -224,7 +224,7 @@ async fn test_stream_invalid_response() {
         id: 0,
         response_callback: Box::new(NoopResponseCallback),
     };
-    let client_response = Response::new(context, ResponsePayload::NumberOfAccountStates(10));
+    let client_response = Response::new(context, ResponsePayload::NumberOfStates(10));
     let pending_response = PendingClientResponse {
         client_request: client_request.clone(),
         client_response: Some(Ok(client_response)),
@@ -380,7 +380,7 @@ fn create_account_stream(
     version: Version,
 ) -> (DataStream<MockAptosDataClient>, DataStreamListener) {
     // Create an account stream request
-    let stream_request = StreamRequest::GetAllAccounts(GetAllAccountsRequest {
+    let stream_request = StreamRequest::GetAllStates(GetAllStatesRequest {
         version,
         start_index: 0,
     });
@@ -424,11 +424,9 @@ fn create_data_stream(
 
     // Create an advertised data
     let advertised_data = AdvertisedData {
-        account_states: vec![CompleteDataRange::new(
-            MIN_ADVERTISED_ACCOUNTS,
-            MAX_ADVERTISED_ACCOUNTS,
-        )
-        .unwrap()],
+        states: vec![
+            CompleteDataRange::new(MIN_ADVERTISED_ACCOUNTS, MAX_ADVERTISED_ACCOUNTS).unwrap(),
+        ],
         epoch_ending_ledger_infos: vec![CompleteDataRange::new(
             MIN_ADVERTISED_EPOCH_END,
             MAX_ADVERTISED_EPOCH_END,
@@ -467,7 +465,7 @@ fn create_global_data_summary(chunk_sizes: u64) -> GlobalDataSummary {
 
 fn create_optimal_chunk_sizes(chunk_sizes: u64) -> OptimalChunkSizes {
     OptimalChunkSizes {
-        account_states_chunk_size: chunk_sizes,
+        state_chunk_size: chunk_sizes,
         epoch_chunk_size: chunk_sizes,
         transaction_chunk_size: chunk_sizes,
         transaction_output_chunk_size: chunk_sizes,

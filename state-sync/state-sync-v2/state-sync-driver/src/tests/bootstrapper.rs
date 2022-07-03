@@ -196,7 +196,7 @@ async fn test_data_stream_accounts() {
 
     // Create a driver configuration with a genesis waypoint and account state syncing
     let mut driver_configuration = create_full_node_driver_configuration();
-    driver_configuration.config.bootstrapping_mode = BootstrappingMode::DownloadLatestAccountStates;
+    driver_configuration.config.bootstrapping_mode = BootstrappingMode::DownloadLatestStates;
 
     // Create the mock streaming client
     let mut mock_streaming_client = create_mock_streaming_client();

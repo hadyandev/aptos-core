@@ -7,8 +7,8 @@ use crate::{
     error::Error,
     streaming_client::{
         new_streaming_service_client_listener_pair, ContinuouslyStreamTransactionOutputsRequest,
-        ContinuouslyStreamTransactionsRequest, DataStreamingClient, GetAllAccountsRequest,
-        GetAllEpochEndingLedgerInfosRequest, GetAllTransactionOutputsRequest,
+        ContinuouslyStreamTransactionsRequest, DataStreamingClient,
+        GetAllEpochEndingLedgerInfosRequest, GetAllStatesRequest, GetAllTransactionOutputsRequest,
         GetAllTransactionsRequest, NotificationFeedback, StreamRequest, StreamingServiceListener,
         TerminateStreamRequest,
     },
@@ -43,7 +43,7 @@ fn test_get_all_accounts() {
 
     // Note the request we expect to receive on the streaming service side
     let request_version = 100;
-    let expected_request = StreamRequest::GetAllAccounts(GetAllAccountsRequest {
+    let expected_request = StreamRequest::GetAllStates(GetAllStatesRequest {
         version: request_version,
         start_index: 0,
     });
